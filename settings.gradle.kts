@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Jaskier"
 include(":app")
+include(":songs")

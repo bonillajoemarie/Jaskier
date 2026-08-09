@@ -38,9 +38,10 @@ You are working on a game development project. This skill teaches the PRINCIPLES
 
 | If you need... | Use Sub-Skill |
 |----------------|---------------|
-| GDD, balancing, player psychology | `game-development/game-design` |
+| GDD, balancing, player psychology | `game-design` |
 | Multiplayer, networking | `game-development/multiplayer` |
-| Visual style, asset pipeline, animation | `game-development/game-art` |
+| Visual style, character design, animation feel | `game-art` |
+| UX for young children (pre-readers, touch, safety) | `kids-ux` |
 | Sound design, music, adaptive audio | `game-development/game-audio` |
 
 ---
