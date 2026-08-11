@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,6 +50,7 @@ import com.example.jaskier.songs.Song
 import com.example.jaskier.songs.SongPlayer
 import com.example.jaskier.songs.Songs
 import com.example.jaskier.speech.TtsManager
+import com.example.jaskier.speech.VoiceTone
 import com.example.jaskier.ui.theme.InkText
 import com.example.jaskier.ui.theme.RainbowCells
 import com.example.jaskier.ui.theme.glossy
@@ -73,6 +75,12 @@ fun SongsScreen(
         onDispose { player.stop() }
     }
 
+    // Rotating giggles so repeat pokes don't say the same thing, mirroring PetHomeScreen.
+    val giggles = remember {
+        listOf("Hehe! That tickles!", "Wheee!", "Hi hi hi!", "Do it again!")
+    }
+    var giggleIndex by remember { mutableIntStateOf(0) }
+
     // Karaoke "now playing" view takes over while a song is selected.
     val karaokeSong = selectedSong
     if (karaokeSong != null) {
@@ -85,6 +93,10 @@ fun SongsScreen(
                 selectedSong = null
             },
             modifier = modifier,
+            onPokeKerker = {
+                tts.speak(giggles[giggleIndex % giggles.size], VoiceTone.GIGGLY)
+                giggleIndex++
+            },
         )
         return
     }
