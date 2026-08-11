@@ -58,6 +58,7 @@ import com.example.jaskier.pet.drawEyeBall
 import com.example.jaskier.pet.drawShadedRoundRect
 import com.example.jaskier.pet.drawSoftBlush
 import com.example.jaskier.speech.TtsManager
+import com.example.jaskier.speech.VoiceTone
 import com.example.jaskier.ui.theme.InkText
 import com.example.jaskier.ui.theme.SkyBlue
 import kotlin.math.sin
@@ -170,7 +171,9 @@ fun ShowerScreen(
                                     if ((change.position - spotPx).getDistance() < minDim() * 0.17f) {
                                         val before = scrubbed[index]
                                         scrubbed[index] = (before + dt / 1300f).coerceAtMost(1f)
-                                        if (before < 1f && scrubbed[index] >= 1f) tts.speak("Scrub scrub!")
+                                        if (before < 1f && scrubbed[index] >= 1f) {
+                                            tts.speak("Scrub, scrub!", VoiceTone.EXCITED)
+                                        }
                                     }
                                 }
                                 if (scrubbed.all { it >= 1f } && step == ShowerStep.SOAP) {
