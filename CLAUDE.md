@@ -9,8 +9,9 @@ a kids' educational virtual-pet game built with Jetpack Compose. The code-drawn,
 "Kerker" (cartoon of the owner's kid: tan skin, dark curly hair, white tank top) has three stats —
 hunger, cleanliness, teeth — that decay in real time (timestamped, recomputed on app open; clamped
 to a floor so the pet never "dies"). Kids feed, shower, and brush its teeth; neglect two or more
-needs and it gets sick Tamagotchi-style until given medicine. Five mini-games: ABC grid, Numbers
-grid (TTS-voiced), Catch (falling letters/numbers eaten by a draggable Kerker, scored), Sing
+needs and it gets sick Tamagotchi-style until given medicine. Seven mini-games: ABC grid, Numbers
+grid, Colors grid (11 main colors as swatch tiles), Shapes grid (10 main shapes, code-drawn via
+`minigames/ShapeArt.kt`) — all four TTS-voiced tap-to-announce — Catch (falling letters/numbers eaten by a draggable Kerker, scored), Sing
 (13 public-domain sung recordings with karaoke view: synced lyrics, per-song themed animated
 backgrounds, tap-for-stars), and Zoo (random fruits/animals board — animals play real recordings,
 fruits squish with juice splatter + TTS name). The pet design is original — inspired by the
@@ -33,6 +34,9 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   `SkyGradient` and dispatches `MiniGamePlay` by catalog type (`AnnounceGame` → grid,
   `CatchGame` → catch screen). New tap-to-announce mini-games need only a new entry in
   `minigames/MiniGame.kt`'s `MiniGames` list; structurally new games add a `MiniGameDef` variant.
+  An `AnnounceItem` carries a `TileArt` — `Glyph` (default, draws the display string), `Swatch`
+  (the tile becomes that color; the label flips to dark ink on pale swatches), or `Shape` (a white
+  silhouette from `ShapeKind`) — so a new grid game rarely needs screen changes.
 - `pet/PetStats.kt` — pure decay/mood math (unit-tested in `app/src/test/.../PetStatsTest.kt`).
   Three stats decay from 100 toward `AWAY_FLOOR` (20) at 16h/24h/12h full-to-floor; `moodOf` gives
   HUNGRY/DIRTY/YUCKY_TEETH below 45 (hunger wins ties) and SICK when ≥2 stats are below 30;

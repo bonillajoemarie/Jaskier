@@ -2,10 +2,13 @@ package com.example.jaskier.minigames
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.keyframes
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,9 +34,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jaskier.R
@@ -90,7 +95,10 @@ fun AnnounceGridScreen(
             itemsIndexed(game.items) { index, item ->
                 AnnounceCell(
                     item = item,
-                    color = RainbowCells[index % RainbowCells.size],
+                    // A color tile shows its own color; everything else takes
+                    // the next color off the rainbow.
+                    color = (item.art as? TileArt.Swatch)?.color
+                        ?: RainbowCells[index % RainbowCells.size],
                     onAnnounce = { tts.speak(item.utterance) },
                 )
             }
@@ -116,6 +124,8 @@ private fun AnnounceCell(
             .shadow(6.dp, RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(glossy(color))
+            // Without this the white swatch reads as a hole in the grid.
+            .border(2.dp, Color(0x22000000), RoundedCornerShape(24.dp))
             .clickable {
                 onAnnounce()
                 scope.launch {
@@ -138,11 +148,49 @@ private fun AnnounceCell(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = item.display,
-            fontSize = 34.sp,
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-        )
+        when (val art = item.art) {
+            // Letters and numbers: the glyph is the whole tile.
+            TileArt.Glyph -> Text(
+                text = item.display,
+                fontSize = 34.sp,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+            )
+
+            // Colors: the tile *is* the color, so the name has to survive on
+            // both a white and a black background.
+            is TileArt.Swatch -> TileLabel(item.display, labelColorOn(art.color))
+
+            // Shapes: a white silhouette on the rainbow tile.
+            is TileArt.Shape -> {
+                Canvas(modifier = Modifier.fillMaxSize().padding(bottom = 18.dp)) {
+                    drawShape(
+                        kind = art.kind,
+                        center = center,
+                        size = size.minDimension * 0.62f,
+                        color = Color.White,
+                    )
+                }
+                TileLabel(item.display, Color.White)
+            }
+        }
     }
 }
+
+/** The written name, small and low on the tile: decoration for parents, per kids-ux. */
+@Composable
+private fun BoxScope.TileLabel(text: String, color: Color) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 8.dp),
+    )
+}
+
+/** Dark ink on pale swatches, white on dark ones, so every color name stays legible. */
+private fun labelColorOn(swatch: Color): Color =
+    if (swatch.luminance() > 0.55f) InkText else Color.White
