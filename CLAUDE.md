@@ -80,7 +80,10 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
 - `minigames/SongsScreen.kt` + `KaraokeView.kt` — song list → full-screen karaoke: line highlight
   synced to `player.positionMs()` (lines weighted by length), themed animated background chosen by
   song id (night sky / floating glyphs / farm / clock / meadow / confetti / steam / snow / sun),
-  dancing mini-Kerker, tap-anywhere star bursts.
+  tap-anywhere star bursts, and a draggable Kerker: kids fling him and he tumbles around the scene
+  — spinning, falling, and bouncing off the walls and floor — until he settles and dances where he
+  landed. Physics live in `minigames/KerkerToyPhysics.kt` as a pure `step()` function (unit-tested
+  in `KerkerToyPhysicsTest`); tapping him squishes him and speaks a giggle.
 - `minigames/ZooScreen.kt` — shuffled fruits/animals grid, all faces/fruits code-drawn with the
   shared shading style; animal tap → SoundPool clip + wiggle, fruit tap → squish scale + juice
   splatter particles + TTS name.

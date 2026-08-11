@@ -6,10 +6,12 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,12 +31,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -45,13 +49,17 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jaskier.songs.Song
@@ -71,6 +79,7 @@ fun KaraokeView(
     isPlaying: Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    onPokeKerker: () -> Unit = {},
 ) {
     // Follow the recording: highlight advances with playback position,
     // weighting each line by its length.
@@ -103,23 +112,140 @@ fun KaraokeView(
     var burstAt by remember { mutableStateOf<Offset?>(null) }
     val scope = rememberCoroutineScope()
 
+    // Poking him squishes him, volume-preserving: wider means shorter.
+    val squish = remember { Animatable(1f) }
+
+    // Kerker is a physical toy the kid can fling around the scene.
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var toy by remember { mutableStateOf(ToyState()) }
+    var grabbed by remember { mutableStateOf(false) }
+
+    val toyRadius = if (canvasSize == IntSize.Zero) {
+        0f
+    } else {
+        minOf(canvasSize.width, canvasSize.height) * 0.09f
+    }
+    // Bounds constrain his centre: inset by his drawn size, with the floor at 90%
+    // of the screen so he never lands under the "tap for stars" caption.
+    val playground = remember(canvasSize, toyRadius) {
+        if (toyRadius <= 0f) {
+            Rect.Zero
+        } else {
+            Rect(
+                left = toyRadius,
+                top = toyRadius * 1.2f,
+                right = canvasSize.width - toyRadius,
+                bottom = canvasSize.height * 0.90f,
+            )
+        }
+    }
+
+    // Drop him into his home corner once the layout size is known.
+    LaunchedEffect(playground) {
+        if (playground != Rect.Zero && toy.pos == Offset.Zero) {
+            toy = ToyState(
+                pos = Offset(canvasSize.width * 0.82f, playground.bottom),
+                resting = true,
+            )
+        }
+    }
+
+    // Frame loop: only runs the integrator while he is actually in flight.
+    LaunchedEffect(playground) {
+        var lastFrame = 0L
+        while (isActive) {
+            withFrameNanos { now ->
+                val dt = if (lastFrame == 0L) {
+                    0f
+                } else {
+                    ((now - lastFrame) / 1_000_000_000f).coerceAtMost(0.05f)
+                }
+                lastFrame = now
+                if (!grabbed && !toy.resting) toy = step(toy, dt, playground)
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .onSizeChanged { canvasSize = it }
+            .pointerInput(playground) {
                 detectTapGestures { offset ->
                     burstAt = offset
+                    val hitKerker = playground != Rect.Zero &&
+                        (offset - toy.pos).getDistance() < toyRadius * 1.6f
+                    if (hitKerker) onPokeKerker()
+                    // Two launches so the squish and the stars run concurrently —
+                    // a cosmetic animation must never block the next tap.
+                    scope.launch {
+                        if (hitKerker) {
+                            squish.snapTo(1.28f)
+                            squish.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 380f))
+                        }
+                    }
                     scope.launch {
                         burst.snapTo(0f)
                         burst.animateTo(1f, tween(600))
                         burst.snapTo(0f)
                     }
                 }
+            }
+            .pointerInput(playground) {
+                val tracker = VelocityTracker()
+                detectDragGestures(
+                    onDragStart = { start ->
+                        // Generous grab radius — little fingers aren't precise.
+                        if (playground != Rect.Zero &&
+                            (start - toy.pos).getDistance() < toyRadius * 1.8f
+                        ) {
+                            grabbed = true
+                            tracker.resetTracking()
+                            toy = toy.copy(vel = Offset.Zero, spin = 0f, resting = false)
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        if (grabbed) {
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            // He leans in the direction he's being pulled.
+                            val lean = ((change.position.x - toy.pos.x) * 3f).coerceIn(-18f, 18f)
+                            toy = toy.copy(pos = change.position, angle = lean)
+                        }
+                    },
+                    onDragEnd = {
+                        if (grabbed) {
+                            grabbed = false
+                            val v = tracker.calculateVelocity()
+                            toy = toy.copy(
+                                vel = Offset(v.x, v.y),
+                                spin = (v.x / 8f).coerceIn(-900f, 900f),
+                                resting = false,
+                            )
+                        }
+                    },
+                    onDragCancel = {
+                        if (grabbed) {
+                            grabbed = false
+                            toy = toy.copy(vel = Offset.Zero, spin = 0f, resting = false)
+                        }
+                    },
+                )
             },
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawSongBackground(song.id, t)
-            drawDancingKerker(beat, isPlaying)
+            if (playground != Rect.Zero) {
+                drawKerkerToy(
+                    center = toy.pos,
+                    radius = toyRadius,
+                    rotation = toy.angle,
+                    squish = squish.value,
+                    airborne = !toy.resting,
+                    groundY = playground.bottom,
+                    beat = beat,
+                    isPlaying = isPlaying,
+                )
+            }
             val at = burstAt
             if (burst.value > 0f && at != null) drawStarBurst(at, burst.value)
         }
@@ -447,56 +573,76 @@ private fun DrawScope.drawSunshine(t: Float) {
 
 // ---- foreground extras -------------------------------------------------------
 
-// Mini Kerker bops to the beat in the bottom corner, with floating notes.
-private fun DrawScope.drawDancingKerker(beat: Float, isPlaying: Boolean) {
-    val r = size.minDimension * 0.09f
-    val bounce = if (isPlaying) kotlin.math.abs(sin(beat * TWO_PI)) * r * 0.35f else 0f
-    val tilt = if (isPlaying) sin(beat * TWO_PI) * 8f else 0f
-    val c = Offset(size.width * 0.82f, size.height * 0.86f - bounce)
+// Kerker as a draggable toy: he bops in place when settled, and spins freely
+// while airborne. Geometry is proportional to [radius] so the same code serves
+// any size.
+private fun DrawScope.drawKerkerToy(
+    center: Offset,
+    radius: Float,
+    rotation: Float,
+    squish: Float,
+    airborne: Boolean,
+    groundY: Float,
+    beat: Float,
+    isPlaying: Boolean,
+) {
+    val r = radius
+    val dancing = isPlaying && !airborne
+    val bounce = if (dancing) kotlin.math.abs(sin(beat * TWO_PI)) * r * 0.35f else 0f
+    val tilt = if (dancing) sin(beat * TWO_PI) * 8f else 0f
+    val c = Offset(center.x, center.y - bounce)
     val skin = Color(0xFFF0C09A)
 
-    drawOval(
-        Color(0x33000000),
-        topLeft = Offset(c.x - r * 0.9f, size.height * 0.86f + r * 1.05f),
-        size = Size(r * 1.8f, r * 0.3f),
-    )
-    rotate(degrees = tilt, pivot = c) {
+    // Contact shadow, fading out the higher he flies.
+    val lift = (groundY - center.y).coerceAtLeast(0f)
+    val shadowAlpha = 0.2f * (1f - lift / (r * 8f)).coerceIn(0f, 1f)
+    if (shadowAlpha > 0.01f) {
         drawOval(
-            Brush.radialGradient(
-                listOf(Color(0xFFFAD9B8), skin, Color(0xFFC99669)),
-                center = c - Offset(r * 0.3f, r * 0.5f),
-                radius = r * 2.2f,
-            ),
-            topLeft = Offset(c.x - r, c.y - r * 1.15f),
-            size = Size(r * 2f, r * 2.3f),
-        )
-        // vest
-        drawArc(
-            Color.White,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = true,
-            topLeft = Offset(c.x - r, c.y - r * 1.15f),
-            size = Size(r * 2f, r * 2.3f),
-        )
-        // hair
-        for (dx in listOf(-0.5f, -0.17f, 0.17f, 0.5f)) {
-            drawCircle(Color(0xFF32241B), r * 0.26f, Offset(c.x + dx * r, c.y - r * 0.95f))
-        }
-        // eyes + open singing mouth
-        for (side in listOf(-1f, 1f)) {
-            drawCircle(Color.White, r * 0.2f, Offset(c.x + side * r * 0.38f, c.y - r * 0.4f))
-            drawCircle(Color(0xFF2A180C), r * 0.1f, Offset(c.x + side * r * 0.38f, c.y - r * 0.42f))
-        }
-        drawOval(
-            Color(0xFF2C2C2C),
-            topLeft = Offset(c.x - r * 0.22f, c.y - r * 0.05f),
-            size = Size(r * 0.44f, r * 0.4f),
+            Color.Black.copy(alpha = shadowAlpha),
+            topLeft = Offset(c.x - r * 0.9f, groundY + r * 1.05f),
+            size = Size(r * 1.8f, r * 0.3f),
         )
     }
 
-    // floating music notes
-    if (isPlaying) {
+    scale(scaleX = squish, scaleY = 1f / squish, pivot = c) {
+        rotate(degrees = rotation + tilt, pivot = c) {
+            drawOval(
+                Brush.radialGradient(
+                    listOf(Color(0xFFFAD9B8), skin, Color(0xFFC99669)),
+                    center = c - Offset(r * 0.3f, r * 0.5f),
+                    radius = r * 2.2f,
+                ),
+                topLeft = Offset(c.x - r, c.y - r * 1.15f),
+                size = Size(r * 2f, r * 2.3f),
+            )
+            // vest
+            drawArc(
+                Color.White,
+                startAngle = 20f,
+                sweepAngle = 140f,
+                useCenter = true,
+                topLeft = Offset(c.x - r, c.y - r * 1.15f),
+                size = Size(r * 2f, r * 2.3f),
+            )
+            // hair
+            for (dx in listOf(-0.5f, -0.17f, 0.17f, 0.5f)) {
+                drawCircle(Color(0xFF32241B), r * 0.26f, Offset(c.x + dx * r, c.y - r * 0.95f))
+            }
+            // eyes + open singing mouth
+            for (side in listOf(-1f, 1f)) {
+                drawCircle(Color.White, r * 0.2f, Offset(c.x + side * r * 0.38f, c.y - r * 0.4f))
+                drawCircle(Color(0xFF2A180C), r * 0.1f, Offset(c.x + side * r * 0.38f, c.y - r * 0.42f))
+            }
+            drawOval(
+                Color(0xFF2C2C2C),
+                topLeft = Offset(c.x - r * 0.22f, c.y - r * 0.05f),
+                size = Size(r * 0.44f, r * 0.4f),
+            )
+        }
+    }
+
+    // Floating music notes, only while he is settled and singing.
+    if (dancing) {
         for (i in 0 until 3) {
             val phase = (beat + i / 3f) % 1f
             val nx = c.x - r * (1.6f + i * 0.5f)
