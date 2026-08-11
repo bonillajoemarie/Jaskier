@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jaskier.R
+import com.example.jaskier.pet.FEED_AMOUNT
 import com.example.jaskier.pet.PetViewModel
 import com.example.jaskier.pet.drawBall
 import com.example.jaskier.pet.drawContactShadow
@@ -65,13 +67,27 @@ private const val TWO_PI = 2f * Math.PI.toFloat()
 
 private enum class FeedStep { CHOOSE, EAT, DONE }
 
-private data class FoodChoice(val id: String, val name: String, val color: Color, val darker: Color)
+private data class FoodChoice(
+    val id: String,
+    val name: String,
+    val color: Color,
+    val darker: Color,
+    val hunger: Float = FEED_AMOUNT,
+    // Milk is the one food that also quenches.
+    val hydration: Float = 0f,
+)
 
 private val FoodChoices = listOf(
     FoodChoice("apple", "Apple", Color(0xFFFF6B6B), Color(0xFFE8323F)),
     FoodChoice("banana", "Banana", Color(0xFFFBE47A), Color(0xFFF2C230)),
-    FoodChoice("broccoli", "Broccoli", Color(0xFF6FCF97), Color(0xFF41A66B)),
-    FoodChoice("berry", "Berry", Color(0xFF9B8CDB), Color(0xFF7461C4)),
+    FoodChoice("berry", "Berry", Color(0xFF9B8CDB), Color(0xFF7461C4), hunger = 25f),
+    FoodChoice("broccoli", "Broccoli", Color(0xFF6FCF97), Color(0xFF41A66B), hunger = 25f),
+    FoodChoice("carrot", "Carrot", Color(0xFFFF9F43), Color(0xFFE07C1F), hunger = 25f),
+    FoodChoice("bread", "Bread", Color(0xFFE7B96B), Color(0xFFC4923F)),
+    FoodChoice("egg", "Egg", Color(0xFFFFF6E0), Color(0xFFE6D5AE)),
+    FoodChoice("meat", "Meat", Color(0xFFC0694F), Color(0xFF974B36), hunger = 40f),
+    FoodChoice("milk", "Milk", Color(0xFFFFFDF7), Color(0xFFE3E9EE), hydration = 25f),
+    FoodChoice("cookie", "Cookie", Color(0xFFD9A468), Color(0xFFB37E3F), hunger = 20f),
 )
 
 private class PlateFood(val choice: FoodChoice, var bites: Int = 2)
@@ -165,7 +181,8 @@ fun FeedScreen(
                             val nearMouth = (change.position - mouthCenter()).getDistance() < minDim() * 0.15f
                             mouthOpen = spoonLoad != null && nearMouth
                             if (spoonLoad != null && nearMouth) {
-                                viewModel.feed()
+                                val eaten = spoonLoad
+                                if (eaten != null) viewModel.feed(eaten.hunger, eaten.hydration)
                                 tts.speak(
                                     if (plate.isEmpty()) "Yum... yum!" else "Mmm, yummy!",
                                     VoiceTone.EXCITED,
@@ -234,8 +251,11 @@ private fun PointerInputScope.minDim(): Float = kotlin.math.min(size.width, size
 
 private fun PointerInputScope.shelfSlot(i: Int) = shelfSlotOf(i, size.width.toFloat(), size.height.toFloat())
 private fun DrawScope.shelfSlotDraw(i: Int) = shelfSlotOf(i, size.width, size.height)
-private fun shelfSlotOf(i: Int, w: Float, h: Float) =
-    Offset(w * (0.14f + 0.24f * i), h * 0.85f)
+private fun shelfSlotOf(i: Int, w: Float, h: Float): Offset {
+    val column = i % 5
+    val row = i / 5
+    return Offset(w * (0.13f + 0.185f * column), h * (0.80f + 0.11f * row))
+}
 
 private fun PointerInputScope.plateCenter() = Offset(size.width * 0.5f, size.height * 0.68f)
 private fun DrawScope.plateCenterDraw() = Offset(size.width * 0.5f, size.height * 0.68f)
@@ -447,6 +467,106 @@ private fun DrawScope.drawFoodBlob(choice: FoodChoice, at: Offset, r: Float) {
                     r * 0.55f,
                     at + Offset(dx * r, dy * r),
                 )
+            }
+        }
+        "carrot" -> {
+            val body = Path().apply {
+                moveTo(at.x - r * 0.55f, at.y - r * 0.5f)
+                lineTo(at.x + r * 0.55f, at.y - r * 0.5f)
+                lineTo(at.x, at.y + r * 1.05f)
+                close()
+            }
+            drawPath(body, Brush.verticalGradient(listOf(choice.color, choice.darker)))
+            for (dx in listOf(-0.4f, 0f, 0.4f)) {
+                drawLine(
+                    Color(0xFF4E9440),
+                    at + Offset(dx * r * 0.6f, -r * 0.5f),
+                    at + Offset(dx * r, -r * 1.15f),
+                    strokeWidth = r * 0.18f,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        "bread" -> {
+            drawRoundRect(
+                Brush.verticalGradient(listOf(lerp(choice.color, Color.White, 0.25f), choice.darker)),
+                topLeft = Offset(at.x - r, at.y - r * 0.7f),
+                size = Size(r * 2f, r * 1.4f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r * 0.6f, r * 0.7f),
+            )
+            // scored top, the way a loaf is slashed before baking
+            for (dx in listOf(-0.45f, 0f, 0.45f)) {
+                drawLine(
+                    choice.darker,
+                    at + Offset(dx * r - r * 0.12f, -r * 0.3f),
+                    at + Offset(dx * r + r * 0.12f, -r * 0.05f),
+                    strokeWidth = r * 0.12f,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
+        "egg" -> {
+            drawOval(
+                Brush.radialGradient(
+                    listOf(Color.White, choice.color, choice.darker),
+                    center = at - Offset(r * 0.3f, r * 0.4f),
+                    radius = r * 1.8f,
+                ),
+                topLeft = Offset(at.x - r * 0.72f, at.y - r),
+                size = Size(r * 1.44f, r * 2f),
+            )
+            drawOval(
+                Color(0xFFFFC93C),
+                topLeft = Offset(at.x - r * 0.3f, at.y - r * 0.1f),
+                size = Size(r * 0.6f, r * 0.6f),
+            )
+        }
+        "meat" -> {
+            // drumstick: a rounded chunk on a bone
+            drawRoundRect(
+                Color(0xFFF3ECDF),
+                topLeft = Offset(at.x + r * 0.1f, at.y - r * 0.2f),
+                size = Size(r * 1.15f, r * 0.4f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r * 0.2f),
+            )
+            drawCircle(Color(0xFFF3ECDF), r * 0.26f, at + Offset(r * 1.2f, -r * 0.28f))
+            drawCircle(Color(0xFFF3ECDF), r * 0.26f, at + Offset(r * 1.2f, r * 0.14f))
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(lerp(choice.color, Color.White, 0.3f), choice.color, choice.darker),
+                    center = at - Offset(r * 0.35f, r * 0.4f),
+                    radius = r * 1.9f,
+                ),
+                r * 0.9f,
+                at,
+            )
+        }
+        "milk" -> {
+            drawRoundRect(
+                Brush.verticalGradient(listOf(Color(0xFFEFF7FA), Color(0xFFCFDDE4))),
+                topLeft = Offset(at.x - r * 0.62f, at.y - r * 0.95f),
+                size = Size(r * 1.24f, r * 1.9f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r * 0.2f),
+            )
+            drawRoundRect(
+                Color(0xFFFFFDF7),
+                topLeft = Offset(at.x - r * 0.5f, at.y - r * 0.55f),
+                size = Size(r * 1f, r * 1.42f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r * 0.16f),
+            )
+        }
+        "cookie" -> {
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(lerp(choice.color, Color.White, 0.25f), choice.color, choice.darker),
+                    center = at - Offset(r * 0.3f, r * 0.35f),
+                    radius = r * 1.8f,
+                ),
+                r,
+                at,
+            )
+            for ((dx, dy) in listOf(-0.4f to -0.3f, 0.35f to -0.1f, -0.1f to 0.4f, 0.4f to 0.45f)) {
+                drawCircle(Color(0xFF4E342E), r * 0.16f, at + Offset(dx * r, dy * r))
             }
         }
         else -> {

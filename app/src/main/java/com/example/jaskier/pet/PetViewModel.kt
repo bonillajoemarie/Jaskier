@@ -15,12 +15,13 @@ import kotlinx.coroutines.launch
 
 data class PetUiState(
     val hunger: Float = STAT_MAX,
+    val hydration: Float = STAT_MAX,
     val cleanliness: Float = STAT_MAX,
     val teeth: Float = STAT_MAX,
     val mood: PetMood = PetMood.HAPPY,
 )
 
-enum class PetEvent { FED, SHOWERED, BRUSHED, HEALED }
+enum class PetEvent { FED, DRANK, SHOWERED, BRUSHED, HEALED }
 
 class PetViewModel(
     private val repository: PetRepository,
@@ -31,6 +32,7 @@ class PetViewModel(
         .map {
             PetUiState(
                 hunger = it.hunger,
+                hydration = it.hydration,
                 cleanliness = it.cleanliness,
                 teeth = it.teeth,
                 mood = it.mood,
@@ -54,7 +56,12 @@ class PetViewModel(
         viewModelScope.launch { repository.refresh(clock()) }
     }
 
-    fun feed() = act(PetEvent.FED) { repository.feed(it) }
+    fun feed(hunger: Float = FEED_AMOUNT, hydration: Float = 0f) =
+        act(PetEvent.FED) { repository.feed(it, hunger, hydration) }
+
+    fun drink() = act(PetEvent.DRANK) { repository.drink(it) }
+
+    fun bottleFeed() = act(PetEvent.DRANK) { repository.bottleFeed(it) }
 
     fun shower() = act(PetEvent.SHOWERED) { repository.shower(it) }
 

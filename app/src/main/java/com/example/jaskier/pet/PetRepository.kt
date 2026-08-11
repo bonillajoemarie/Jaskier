@@ -21,7 +21,12 @@ class PetRepository(context: Context) {
 
     suspend fun refresh(now: Long) = update(now) { it }
 
-    suspend fun feed(now: Long) = update(now) { it.fed() }
+    suspend fun feed(now: Long, hunger: Float = FEED_AMOUNT, hydration: Float = 0f) =
+        update(now) { it.fed(hunger, hydration) }
+
+    suspend fun drink(now: Long) = update(now) { it.drank() }
+
+    suspend fun bottleFeed(now: Long) = update(now) { it.bottleFed() }
 
     suspend fun shower(now: Long) = update(now) { it.showered() }
 
@@ -40,6 +45,8 @@ class PetRepository(context: Context) {
 
     private fun Preferences.toPetStats(defaultTimestamp: Long = 0L) = PetStats(
         hunger = this[KEY_HUNGER] ?: STAT_MAX,
+        // A save from before hydration existed reads as full, not parched.
+        hydration = this[KEY_HYDRATION] ?: STAT_MAX,
         cleanliness = this[KEY_CLEANLINESS] ?: STAT_MAX,
         teeth = this[KEY_TEETH] ?: STAT_MAX,
         lastUpdatedMillis = this[KEY_LAST_UPDATED] ?: defaultTimestamp,
@@ -47,6 +54,7 @@ class PetRepository(context: Context) {
 
     private fun MutablePreferences.write(stats: PetStats) {
         this[KEY_HUNGER] = stats.hunger
+        this[KEY_HYDRATION] = stats.hydration
         this[KEY_CLEANLINESS] = stats.cleanliness
         this[KEY_TEETH] = stats.teeth
         this[KEY_LAST_UPDATED] = stats.lastUpdatedMillis
@@ -54,6 +62,7 @@ class PetRepository(context: Context) {
 
     private companion object {
         val KEY_HUNGER = floatPreferencesKey("hunger")
+        val KEY_HYDRATION = floatPreferencesKey("hydration")
         val KEY_CLEANLINESS = floatPreferencesKey("cleanliness")
         val KEY_TEETH = floatPreferencesKey("teeth")
         val KEY_LAST_UPDATED = longPreferencesKey("last_updated_ms")

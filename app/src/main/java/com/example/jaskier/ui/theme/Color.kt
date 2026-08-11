@@ -24,3 +24,6 @@ val RainbowCells = listOf(
     GrapePurple,
     BubblePink,
 )
+
+// Drinking water: cooler and deeper than the shower blue it sits beside.
+val WaterBlue = Color(0xFF3AB4E8)

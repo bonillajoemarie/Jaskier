@@ -2,12 +2,14 @@
     <string name="app_name">Jaskier</string>
     <string name="pet_name">Kerker</string>
     <string name="feed_button">Feed</string>
+    <string name="drink_button">Water</string>
     <string name="shower_button">Shower</string>
     <string name="brush_button">Brush</string>
     <string name="heal_button">Medicine</string>
     <string name="play_section">Play!</string>
     <string name="back_button">Back</string>
     <string name="hunger_label">Tummy</string>
+    <string name="hydration_label">Water</string>
     <string name="cleanliness_label">Clean</string>
     <string name="teeth_label">Teeth</string>
     <string name="score_label">Score</string>

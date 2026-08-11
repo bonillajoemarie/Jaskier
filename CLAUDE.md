@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Jaskier is a two-module Android app (`:app` + `:songs` library, package `com.example.jaskier`):
 a kids' educational virtual-pet game built with Jetpack Compose. The code-drawn, depth-shaded pet
-"Kerker" (cartoon of the owner's kid: tan skin, dark curly hair, white tank top) has three stats —
-hunger, cleanliness, teeth — that decay in real time (timestamped, recomputed on app open; clamped
-to a floor so the pet never "dies"). Kids feed, shower, and brush its teeth; neglect two or more
+"Kerker" (cartoon of the owner's kid: tan skin, dark curly hair, white tank top) has four stats —
+hunger, hydration, cleanliness, teeth — that decay in real time (timestamped, recomputed on app open; clamped
+to a floor so the pet never "dies"). Kids feed, water, shower, and brush its teeth; neglect two or more
 needs and it gets sick Tamagotchi-style until given medicine. Seven mini-games: ABC grid, Numbers
 grid, Colors grid (11 main colors as swatch tiles), Shapes grid (10 main shapes, code-drawn via
 `minigames/ShapeArt.kt`) — all four TTS-voiced tap-to-announce — Catch (falling letters/numbers eaten by a draggable Kerker, scored), Sing
@@ -38,9 +38,11 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   (the tile becomes that color; the label flips to dark ink on pale swatches), or `Shape` (a white
   silhouette from `ShapeKind`) — so a new grid game rarely needs screen changes.
 - `pet/PetStats.kt` — pure decay/mood math (unit-tested in `app/src/test/.../PetStatsTest.kt`).
-  Three stats decay from 100 toward `AWAY_FLOOR` (20) at 16h/24h/12h full-to-floor; `moodOf` gives
-  HUNGRY/DIRTY/YUCKY_TEETH below 45 (hunger wins ties) and SICK when ≥2 stats are below 30;
-  `medicined()` lifts low stats to 55.
+  Four stats decay from 100 toward `AWAY_FLOOR` (20) at 16h/10h/24h/12h full-to-floor (thirst
+  outpaces hunger); `moodOf` gives HUNGRY/THIRSTY/DIRTY/YUCKY_TEETH below 45 (hunger wins ties,
+  thirst next) and SICK when ≥2 of the four are below 30; `medicined()` lifts low stats to 55.
+  `fed(hunger, hydration)` takes per-food amounts — milk is the one food that also quenches;
+  `drank()` refills water; `bottleFed()` refills water and adds 40 hunger.
 - `pet/PetRepository.kt` — DataStore Preferences (`pet_state`); every mutation is decay-then-transform
   inside one atomic `edit {}` keyed on a caller-supplied `now` timestamp.
 - `pet/PetViewModel.kt` — StateFlow UI state + 30s refresh ticker + one-shot `PetEvent` SharedFlow
@@ -95,7 +97,11 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   aren't precise). `ShowerScreen`: tap knob → wet → drag soap over 3 dirt spots (bubbles mark
   soaped spots) → tap knob to rinse. `BrushScreen`: zoomed face, drag toothpaste onto brush, scrub
   6 yellow teeth white. `FeedScreen`: tap foods onto a plate, drag spoon to scoop and deliver to
-  the mouth. All complete → ViewModel action + auto-return home.
+  the mouth. `DrinkScreen`: pick a cup of water (tap the tap to fill, tap his mouth to give him
+  gulps) or the baby bottle (fill with water → tap the tin for 3 scoops of formula → tap the cap →
+  tap to shake until the milk turns creamy → feed). Every step is completable by **tapping alone**
+  — dragging still works but is never required — no tap is ever silent, and progress shows as a
+  filling row of stars. All complete → ViewModel action + auto-return home.
 
 ## Commands
 

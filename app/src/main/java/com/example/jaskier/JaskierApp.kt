@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.jaskier.care.BrushScreen
+import com.example.jaskier.care.DrinkScreen
 import com.example.jaskier.care.FeedScreen
 import com.example.jaskier.care.ShowerScreen
 import com.example.jaskier.minigames.AnnounceGame
@@ -91,6 +92,12 @@ fun JaskierApp(
                     modifier = Modifier.safeDrawingPadding(),
                 )
                 is Screen.Care -> when (current.careId) {
+                    "drink" -> DrinkScreen(
+                        viewModel = petViewModel,
+                        tts = tts,
+                        onDone = goHome,
+                        modifier = Modifier.safeDrawingPadding(),
+                    )
                     "shower" -> ShowerScreen(
                         viewModel = petViewModel,
                         tts = tts,

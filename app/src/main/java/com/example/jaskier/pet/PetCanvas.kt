@@ -113,7 +113,8 @@ fun PetCanvas(
                 anim.snapTo(0f)
             }
             when (event) {
-                PetEvent.FED -> run(feedT, 900)
+                // Drinking reuses the eating animation: mouth open, happy gulp.
+                PetEvent.FED, PetEvent.DRANK -> run(feedT, 900)
                 PetEvent.SHOWERED -> {
                     bubbleSeed.intValue++
                     run(showerT, 1800)

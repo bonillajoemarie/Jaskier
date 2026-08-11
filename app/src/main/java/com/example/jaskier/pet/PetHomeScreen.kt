@@ -56,6 +56,7 @@ import com.example.jaskier.ui.theme.InkText
 import com.example.jaskier.ui.theme.SkyBlue
 import com.example.jaskier.ui.theme.SkyGradient
 import com.example.jaskier.ui.theme.WarmOrange
+import com.example.jaskier.ui.theme.WaterBlue
 import com.example.jaskier.ui.theme.breathe
 import com.example.jaskier.ui.theme.glossy
 import com.example.jaskier.ui.theme.lighter
@@ -78,6 +79,7 @@ fun PetHomeScreen(
     LaunchedEffect(state.mood) {
         val line = when (state.mood) {
             PetMood.HUNGRY -> "My tummy is rumbling! Can you feed me?"
+            PetMood.THIRSTY -> "I'm so thirsty! Can I have a drink, please?"
             PetMood.DIRTY -> "I'm all dirty! I need a shower!"
             PetMood.YUCKY_TEETH -> "My teeth feel yucky! Let's brush them!"
             PetMood.SICK -> "I don't feel good... I need medicine, please!"
@@ -102,7 +104,11 @@ fun PetHomeScreen(
             )
             StatBar(stringResource(R.string.hunger_label), "🍎", state.hunger, WarmOrange)
             StatBar(
-                stringResource(R.string.cleanliness_label), "💧", state.cleanliness, SkyBlue,
+                stringResource(R.string.hydration_label), "🥛", state.hydration, WaterBlue,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            StatBar(
+                stringResource(R.string.cleanliness_label), "🧼", state.cleanliness, SkyBlue,
                 modifier = Modifier.padding(top = 8.dp),
             )
             StatBar(
@@ -155,8 +161,9 @@ fun PetHomeScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 CareButton(stringResource(R.string.feed_button), "🍎", WarmOrange, { onOpenCare("feed") }, Modifier.weight(1f).breathe(0))
-                CareButton(stringResource(R.string.shower_button), "🚿", SkyBlue, { onOpenCare("shower") }, Modifier.weight(1f).breathe(1))
-                CareButton(stringResource(R.string.brush_button), "🪥", TeethMint, { onOpenCare("brush") }, Modifier.weight(1f).breathe(2))
+                CareButton(stringResource(R.string.drink_button), "🍼", WaterBlue, { onOpenCare("drink") }, Modifier.weight(1f).breathe(1))
+                CareButton(stringResource(R.string.shower_button), "🚿", SkyBlue, { onOpenCare("shower") }, Modifier.weight(1f).breathe(2))
+                CareButton(stringResource(R.string.brush_button), "🪥", TeethMint, { onOpenCare("brush") }, Modifier.weight(1f).breathe(3))
             }
 
             Text(

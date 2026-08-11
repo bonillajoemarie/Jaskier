@@ -1,19 +1,23 @@
 package com.example.jaskier
 
 import com.example.jaskier.pet.AWAY_FLOOR
+import com.example.jaskier.pet.BOTTLE_FEED_AMOUNT
 import com.example.jaskier.pet.HUNGER_FULL_TO_FLOOR_HOURS
 import com.example.jaskier.pet.MEDICINE_RECOVERY
 import com.example.jaskier.pet.PetMood
 import com.example.jaskier.pet.PetStats
 import com.example.jaskier.pet.STAT_MAX
 import com.example.jaskier.pet.applyDecay
+import com.example.jaskier.pet.bottleFed
 import com.example.jaskier.pet.brushed
 import com.example.jaskier.pet.decayedTo
+import com.example.jaskier.pet.drank
 import com.example.jaskier.pet.fed
 import com.example.jaskier.pet.medicined
 import com.example.jaskier.pet.moodOf
 import com.example.jaskier.pet.showered
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PetStatsTest {
@@ -83,23 +87,81 @@ class PetStatsTest {
 
     @Test
     fun `mood boundaries`() {
-        assertEquals(PetMood.HUNGRY, moodOf(44.9f, 100f, 100f))
-        assertEquals(PetMood.DIRTY, moodOf(100f, 44.9f, 100f))
-        assertEquals(PetMood.YUCKY_TEETH, moodOf(100f, 100f, 44.9f))
-        assertEquals(PetMood.HUNGRY, moodOf(44f, 44f, 100f)) // hunger wins ties
-        assertEquals(PetMood.HAPPY, moodOf(70f, 70f, 70f))
-        assertEquals(PetMood.HAPPY, moodOf(45f, 45f, 45f))   // threshold itself is still happy
+        assertEquals(PetMood.HUNGRY, moodOf(44.9f, 100f, 100f, 100f))
+        assertEquals(PetMood.DIRTY, moodOf(100f, 100f, 44.9f, 100f))
+        assertEquals(PetMood.YUCKY_TEETH, moodOf(100f, 100f, 100f, 44.9f))
+        assertEquals(PetMood.HUNGRY, moodOf(44f, 100f, 44f, 100f)) // hunger wins ties
+        assertEquals(PetMood.HAPPY, moodOf(70f, 70f, 70f, 70f))
+        assertEquals(PetMood.HAPPY, moodOf(45f, 45f, 45f, 45f))   // threshold itself is still happy
     }
 
     @Test
     fun `sick when at least two needs are badly neglected`() {
-        assertEquals(PetMood.SICK, moodOf(29f, 29f, 100f))
-        assertEquals(PetMood.SICK, moodOf(29f, 100f, 29f))
-        assertEquals(PetMood.SICK, moodOf(100f, 29f, 29f))
-        assertEquals(PetMood.SICK, moodOf(20f, 20f, 20f))
+        assertEquals(PetMood.SICK, moodOf(29f, 100f, 29f, 100f))
+        assertEquals(PetMood.SICK, moodOf(29f, 100f, 100f, 29f))
+        assertEquals(PetMood.SICK, moodOf(100f, 100f, 29f, 29f))
+        assertEquals(PetMood.SICK, moodOf(20f, 20f, 20f, 20f))
         // One badly neglected need alone is not sickness.
-        assertEquals(PetMood.HUNGRY, moodOf(29f, 100f, 100f))
+        assertEquals(PetMood.HUNGRY, moodOf(29f, 100f, 100f, 100f))
         assertEquals(PetMood.SICK, PetStats(hunger = 25f, cleanliness = 25f, teeth = 80f).mood)
+    }
+
+    @Test
+    fun `thirst outpaces hunger`() {
+        val stats = PetStats(lastUpdatedMillis = 0L).decayedTo(5 * hourMs)
+        assertTrue(
+            "expected thirst (${stats.hydration}) below hunger (${stats.hunger})",
+            stats.hydration < stats.hunger,
+        )
+        // 10h full-to-floor over an 80-point span = 8 points per hour.
+        assertEquals(60f, stats.hydration, 0.01f)
+    }
+
+    @Test
+    fun `thirst is announced right after hunger`() {
+        assertEquals(PetMood.THIRSTY, moodOf(100f, 44.9f, 100f, 100f))
+        // Hunger still wins when both are low.
+        assertEquals(PetMood.HUNGRY, moodOf(44f, 44f, 100f, 100f))
+        // ...but thirst beats a dirty body and yucky teeth.
+        assertEquals(PetMood.THIRSTY, moodOf(100f, 44f, 44f, 44f))
+    }
+
+    @Test
+    fun `sickness counts all four needs`() {
+        assertEquals(PetMood.SICK, moodOf(100f, 29f, 29f, 100f))
+        assertEquals(PetMood.SICK, moodOf(29f, 29f, 100f, 100f))
+        // Thirst alone is not sickness.
+        assertEquals(PetMood.THIRSTY, moodOf(100f, 29f, 100f, 100f))
+    }
+
+    @Test
+    fun `drinking refills hydration completely`() {
+        assertEquals(STAT_MAX, PetStats(hydration = AWAY_FLOOR).drank().hydration, 0.0001f)
+    }
+
+    @Test
+    fun `a bottle is both a drink and a meal`() {
+        val fedBottle = PetStats(hunger = 30f, hydration = AWAY_FLOOR).bottleFed()
+        assertEquals(STAT_MAX, fedBottle.hydration, 0.0001f)
+        assertEquals(30f + BOTTLE_FEED_AMOUNT, fedBottle.hunger, 0.0001f)
+        // Hunger still clamps at the maximum.
+        assertEquals(STAT_MAX, PetStats(hunger = 95f).bottleFed().hunger, 0.0001f)
+    }
+
+    @Test
+    fun `milk feeds and hydrates at once`() {
+        val after = PetStats(hunger = 40f, hydration = 40f).fed(hunger = 30f, hydration = 25f)
+        assertEquals(70f, after.hunger, 0.0001f)
+        assertEquals(65f, after.hydration, 0.0001f)
+    }
+
+    @Test
+    fun `medicine lifts hydration too`() {
+        assertEquals(
+            MEDICINE_RECOVERY,
+            PetStats(hydration = 20f).medicined().hydration,
+            0.0001f,
+        )
     }
 
     @Test
