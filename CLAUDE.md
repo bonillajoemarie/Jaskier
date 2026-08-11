@@ -59,7 +59,12 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   6×7 pastel tiles with mini animal faces. Drag past 40% of a tile to swap; matches pop with stars,
   play the matched animal's SoundPool clip, and cascade. No move limit, no fail state.
 - `speech/TtsManager.kt` — TextToSpeech wrapper owned by MainActivity (created onCreate, shutdown
-  onDestroy), speech rate 0.8, QUEUE_FLUSH.
+  onDestroy), QUEUE_FLUSH. On init it picks the warmest usable installed voice via the pure,
+  unit-tested `speech/VoiceSelection.kt` (skipping network-only voices, which stall when a kid taps
+  fast) and falls back to the engine default if none qualify. Delivery is a `VoiceTone`
+  (`speech/VoiceTone.kt`) per utterance — NORMAL is pitch 1.15 at the long-standing 0.8 rate, with
+  EXCITED/SAD/CRYING/SLEEPY/GIGGLY variants. Repeated lines are drawn from rotating sets so nothing
+  is ever heard the same way twice in a row.
 - Theme is always-light and bright (kids' app) regardless of system dark mode; colors in
   `ui/theme/Color.kt`; shared gradient/press-bounce helpers in `ui/theme/Effects.kt`.
 - **`:songs` module** — all bundled audio + catalogs + players. `Catalog.kt` (13 `Song`s with

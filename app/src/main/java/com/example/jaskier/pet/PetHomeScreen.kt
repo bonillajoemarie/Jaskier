@@ -50,6 +50,7 @@ import com.example.jaskier.R
 import com.example.jaskier.minigames.MiniGameDef
 import com.example.jaskier.minigames.MiniGames
 import com.example.jaskier.speech.TtsManager
+import com.example.jaskier.speech.VoiceTone
 import com.example.jaskier.ui.theme.BubblePink
 import com.example.jaskier.ui.theme.InkText
 import com.example.jaskier.ui.theme.SkyBlue
@@ -82,7 +83,7 @@ fun PetHomeScreen(
             PetMood.SICK -> "I don't feel good... I need medicine, please!"
             PetMood.HAPPY -> "Hi! I'm Kerker! Let's play!"
         }
-        tts.speak(line)
+        tts.speak(line, if (state.mood == PetMood.HAPPY) VoiceTone.NORMAL else VoiceTone.SAD)
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -109,7 +110,16 @@ fun PetHomeScreen(
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            val giggles = remember { listOf("Hehe! That tickles!", "Hi hi!", "Hehehe!") }
+            val giggles = remember {
+                listOf(
+                    "Hehe! That tickles!",
+                    "Hi hi!",
+                    "Hehehe!",
+                    "Ooh, that tickles!",
+                    "Wheee!",
+                    "Do it again!",
+                )
+            }
             var giggleIndex by remember { mutableIntStateOf(0) }
             PetCanvas(
                 hunger = state.hunger,
@@ -117,7 +127,7 @@ fun PetHomeScreen(
                 mood = state.mood,
                 events = viewModel.events,
                 onPoke = {
-                    tts.speak(giggles[giggleIndex % giggles.size])
+                    tts.speak(giggles[giggleIndex % giggles.size], VoiceTone.GIGGLY)
                     giggleIndex++
                 },
                 modifier = Modifier

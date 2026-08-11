@@ -55,6 +55,7 @@ import com.example.jaskier.pet.drawEyeBall
 import com.example.jaskier.pet.drawShadedRoundRect
 import com.example.jaskier.pet.drawSoftBlush
 import com.example.jaskier.speech.TtsManager
+import com.example.jaskier.speech.VoiceTone
 import com.example.jaskier.ui.theme.InkText
 import kotlin.math.cos
 import kotlin.math.sin
@@ -165,7 +166,10 @@ fun FeedScreen(
                             mouthOpen = spoonLoad != null && nearMouth
                             if (spoonLoad != null && nearMouth) {
                                 viewModel.feed()
-                                tts.speak(if (plate.isEmpty()) "Yum yum!" else "Mmm, yummy!")
+                                tts.speak(
+                                    if (plate.isEmpty()) "Yum... yum!" else "Mmm, yummy!",
+                                    VoiceTone.EXCITED,
+                                )
                                 spoonLoad = null
                                 mouthOpen = false
                                 if (plate.isEmpty()) {
