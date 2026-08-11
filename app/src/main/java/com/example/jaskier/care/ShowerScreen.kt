@@ -71,6 +71,11 @@ private enum class ShowerStep { TURN_ON, GET_WET, SOAP, RINSE_HINT, RINSING, DON
 // Dirt spots the kid has to scrub, as fractions of the body area.
 private val DirtSpots = listOf(Offset(0.36f, 0.42f), Offset(0.62f, 0.55f), Offset(0.47f, 0.72f))
 
+// Tuned for toddlers: bigger targets and faster fills than the originals.
+private const val DIRT_SCRUB_RADIUS = 0.26f
+private const val DIRT_TAP_RADIUS = 0.30f
+private const val DIRT_FILL_MILLIS = 800f
+
 @Composable
 fun ShowerScreen(
     viewModel: PetViewModel,
@@ -144,6 +149,17 @@ fun ShowerScreen(
                         if (isOnKnob(tap) && (step == ShowerStep.TURN_ON || step == ShowerStep.RINSE_HINT)) {
                             step = if (step == ShowerStep.TURN_ON) ShowerStep.GET_WET else ShowerStep.RINSING
                         }
+                        // Tap-first: tapping a dirt spot soaps it outright, so the
+                        // routine never depends on holding a drag.
+                        if (step == ShowerStep.SOAP) {
+                            DirtSpots.forEachIndexed { index, spot ->
+                                if ((tap - bodySpot(spot)).getDistance() < minDim() * DIRT_TAP_RADIUS) {
+                                    if (scrubbed[index] < 1f) tts.speak("Scrub, scrub!", VoiceTone.EXCITED)
+                                    scrubbed[index] = 1f
+                                }
+                            }
+                            if (scrubbed.all { it >= 1f }) step = ShowerStep.RINSE_HINT
+                        }
                     }
                 }
                 .pointerInput(step) {
@@ -167,13 +183,18 @@ fun ShowerScreen(
                                 lastTickMs = now
                                 // Scrub any dirt spot the soap touches.
                                 DirtSpots.forEachIndexed { index, spot ->
-                                    val spotPx = bodySpot(spot)
-                                    if ((change.position - spotPx).getDistance() < minDim() * 0.17f) {
-                                        val before = scrubbed[index]
-                                        scrubbed[index] = (before + dt / 1300f).coerceAtMost(1f)
-                                        if (before < 1f && scrubbed[index] >= 1f) {
-                                            tts.speak("Scrub, scrub!", VoiceTone.EXCITED)
-                                        }
+                                    val distance = (change.position - bodySpot(spot)).getDistance()
+                                    val before = scrubbed[index]
+                                    scrubbed[index] = scrubProgress(
+                                        current = before,
+                                        dtMillis = dt,
+                                        fillMillis = DIRT_FILL_MILLIS,
+                                        onTarget = distance < minDim() * DIRT_SCRUB_RADIUS,
+                                        nearTarget = distance < minDim() * DIRT_SCRUB_RADIUS * 1.8f,
+                                        toolMoving = true,
+                                    )
+                                    if (before < 1f && scrubbed[index] >= 1f) {
+                                        tts.speak("Scrub, scrub!", VoiceTone.EXCITED)
                                     }
                                 }
                                 if (scrubbed.all { it >= 1f } && step == ShowerStep.SOAP) {

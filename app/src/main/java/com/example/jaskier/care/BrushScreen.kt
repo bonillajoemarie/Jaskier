@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -59,6 +60,11 @@ import kotlinx.coroutines.delay
 private enum class BrushStep { PASTE, BRUSH, DONE }
 private const val TOOTH_COUNT = 6
 
+// Tuned for toddlers: bigger targets, faster fills, and taps that just work.
+private const val TOOTH_SCRUB_RADIUS = 0.20f
+private const val TOOTH_TAP_RADIUS = 0.24f
+private const val TOOTH_FILL_MILLIS = 300f
+
 @Composable
 fun BrushScreen(
     viewModel: PetViewModel,
@@ -102,6 +108,27 @@ fun BrushScreen(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
+                // Tap-first: a two-year-old cannot hold a drag, so every step
+                // must be completable with taps alone. Dragging still works.
+                .pointerInput(step) {
+                    detectTapGestures { tap ->
+                        when (step) {
+                            BrushStep.PASTE -> {
+                                pasteAmount = 1f
+                                step = BrushStep.BRUSH
+                            }
+                            BrushStep.BRUSH -> {
+                                for (i in 0 until TOOTH_COUNT) {
+                                    if ((tap - toothCenter(i)).getDistance() < minDim() * TOOTH_TAP_RADIUS) {
+                                        teethClean[i] = 1f
+                                    }
+                                }
+                                if (teethClean.all { it >= 1f }) step = BrushStep.DONE
+                            }
+                            BrushStep.DONE -> Unit
+                        }
+                    }
+                }
                 .pointerInput(step) {
                     detectDragGestures(
                         onDragStart = { start ->
@@ -130,8 +157,8 @@ fun BrushScreen(
                             if (pasteHeld) {
                                 pastePos = change.position
                                 // Squeeze paste while the tube is over the brush head.
-                                if ((change.position - brushRestPos()).getDistance() < minDim() * 0.22f) {
-                                    pasteAmount = (pasteAmount + dt / 900f).coerceAtMost(1f)
+                                if ((change.position - brushRestPos()).getDistance() < minDim() * 0.30f) {
+                                    pasteAmount = (pasteAmount + dt / 600f).coerceAtMost(1f)
                                     if (pasteAmount >= 1f && step == BrushStep.PASTE) {
                                         step = BrushStep.BRUSH
                                         pasteHeld = false
@@ -142,11 +169,19 @@ fun BrushScreen(
                             if (brushHeld) {
                                 brushPos = change.position
                                 if (step == BrushStep.BRUSH) {
-                                    // Scrub whichever tooth the bristles touch.
+                                    // Scrub whichever tooth the bristles touch, and
+                                    // credit its neighbours too — dragging across the
+                                    // mouth should visibly help everywhere.
                                     for (i in 0 until TOOTH_COUNT) {
-                                        if ((change.position - toothCenter(i)).getDistance() < minDim() * 0.13f) {
-                                            teethClean[i] = (teethClean[i] + dt / 450f).coerceAtMost(1f)
-                                        }
+                                        val distance = (change.position - toothCenter(i)).getDistance()
+                                        teethClean[i] = scrubProgress(
+                                            current = teethClean[i],
+                                            dtMillis = dt,
+                                            fillMillis = TOOTH_FILL_MILLIS,
+                                            onTarget = distance < minDim() * TOOTH_SCRUB_RADIUS,
+                                            nearTarget = distance < minDim() * TOOTH_SCRUB_RADIUS * 1.8f,
+                                            toolMoving = true,
+                                        )
                                     }
                                     if (teethClean.all { it >= 1f }) {
                                         step = BrushStep.DONE

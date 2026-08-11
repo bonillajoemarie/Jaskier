@@ -53,7 +53,16 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   anchors (`headC()`, `headR()`, `mouthAnchor()`, `feetY()`). Interactive: pupils track the finger,
   tap = squish + hearts + `onPoke` callback (home speaks a giggle). Mood visuals: sad brows
   (hungry), dirt/stink (dirty), yellow teeth (yucky), pale green + droopy lids + sweat drop (sick).
-  Teeth render as individual crowns under a gum line (see also BrushScreen).
+  Teeth render as individual crowns under a gum line (see also BrushScreen). Touching him is
+  zone-aware (`pet/KerkerTouch.kt`, unit-tested in `KerkerTouchTest`): head, each cheek, belly, and
+  feet each get their own rotating voice line, and a back-and-forth rub is detected as a tickle via
+  `TickleDetector` (direction reversals inside a time window, never event counts).
+- `pet/PetFeeling.kt` — pure emotion layer (unit-tested in `PetFeelingTest`). `feelingOf` returns a
+  mood plus a `crying` flag, true once the driving stat falls below `SICK_THRESHOLD` and always when
+  sick; `emotionOf` resolves the displayed `Emotion` with distress outranking excited/laughing/
+  sleepy/bored, so a needy Kerker never looks bored. Crying is a *cartoon* waah that stops the
+  moment the kid helps — per kids-ux the character must never appear to suffer, and no line ever
+  blames the kid for being away.
 - **Narration**: everything speaks. Home greets and voices Kerker's needs on mood change; every
   `MiniGameDef` has an `intro` spoken on entry; care steps speak their instructions; activities
   have voice lines ("Yum yum!", "Scrub scrub!", giggles on poke). All via `TtsManager`.

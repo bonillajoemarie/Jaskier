@@ -75,17 +75,36 @@ fun PetHomeScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val feeling = feelingOf(state.hunger, state.hydration, state.cleanliness, state.teeth)
+
     // Kerker says hello, then tells the kid what he needs whenever it changes.
-    LaunchedEffect(state.mood) {
+    // When a need gets bad he cries about it — a cartoon waah, never a guilt
+    // trip, and it stops the moment the kid helps.
+    LaunchedEffect(state.mood, feeling.crying) {
         val line = when (state.mood) {
-            PetMood.HUNGRY -> "My tummy is rumbling! Can you feed me?"
-            PetMood.THIRSTY -> "I'm so thirsty! Can I have a drink, please?"
-            PetMood.DIRTY -> "I'm all dirty! I need a shower!"
-            PetMood.YUCKY_TEETH -> "My teeth feel yucky! Let's brush them!"
-            PetMood.SICK -> "I don't feel good... I need medicine, please!"
+            PetMood.HUNGRY ->
+                if (feeling.crying) "Waaah! My tummy hurts! Please feed me!"
+                else "My tummy is rumbling! Can you feed me?"
+            PetMood.THIRSTY ->
+                if (feeling.crying) "Waaah! So thirsty! Water, please!"
+                else "I'm so thirsty! Can I have a drink, please?"
+            PetMood.DIRTY ->
+                if (feeling.crying) "Waaah! I'm all yucky! Shower, please!"
+                else "I'm all dirty! I need a shower!"
+            PetMood.YUCKY_TEETH ->
+                if (feeling.crying) "Waaah! My teeth feel awful! Let's brush!"
+                else "My teeth feel yucky! Let's brush them!"
+            PetMood.SICK -> "Waaah... I don't feel good. Medicine, please!"
             PetMood.HAPPY -> "Hi! I'm Kerker! Let's play!"
         }
-        tts.speak(line, if (state.mood == PetMood.HAPPY) VoiceTone.NORMAL else VoiceTone.SAD)
+        tts.speak(
+            line,
+            when {
+                feeling.crying -> VoiceTone.CRYING
+                state.mood != PetMood.HAPPY -> VoiceTone.SAD
+                else -> VoiceTone.NORMAL
+            },
+        )
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -116,25 +135,27 @@ fun PetHomeScreen(
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            val giggles = remember {
-                listOf(
-                    "Hehe! That tickles!",
-                    "Hi hi!",
-                    "Hehehe!",
-                    "Ooh, that tickles!",
-                    "Wheee!",
-                    "Do it again!",
-                )
+            // Each body part has its own reaction, and each rotates its lines so
+            // repeat pokes never say the same thing twice in a row.
+            var pokeIndex by remember { mutableIntStateOf(0) }
+            val speakZone: (KerkerZone) -> Unit = { zone ->
+                val lines = linesFor(zone)
+                tts.speak(lines[pokeIndex % lines.size], VoiceTone.GIGGLY)
+                pokeIndex++
             }
-            var giggleIndex by remember { mutableIntStateOf(0) }
+            val tickles = remember {
+                listOf("Hahaha! Stop it!", "Eeee! That tickles!", "Hehehehe!")
+            }
             PetCanvas(
                 hunger = state.hunger,
                 cleanliness = state.cleanliness,
                 mood = state.mood,
                 events = viewModel.events,
-                onPoke = {
-                    tts.speak(giggles[giggleIndex % giggles.size], VoiceTone.GIGGLY)
-                    giggleIndex++
+                onPoke = { speakZone(KerkerZone.NONE) },
+                onTouchZone = speakZone,
+                onTickle = {
+                    tts.speak(tickles[pokeIndex % tickles.size], VoiceTone.GIGGLY)
+                    pokeIndex++
                 },
                 modifier = Modifier
                     .fillMaxWidth()

@@ -65,6 +65,8 @@ fun PetCanvas(
     events: Flow<PetEvent>,
     modifier: Modifier = Modifier,
     onPoke: () -> Unit = {},
+    onTouchZone: (KerkerZone) -> Unit = {},
+    onTickle: () -> Unit = {},
 ) {
     val idle = rememberInfiniteTransition(label = "idle")
     val bobT by idle.animateFloat(
@@ -146,8 +148,15 @@ fun PetCanvas(
                         tryAwaitRelease()
                         touch = null
                     },
-                    onTap = {
-                        onPoke()
+                    onTap = { at ->
+                        // Different body parts react differently, Talking-Tom style.
+                        val minDim = minOf(size.width, size.height).toFloat()
+                        val zone = zoneAt(
+                            at,
+                            Offset(size.width / 2f, size.height * 0.40f),
+                            minDim * 0.30f,
+                        )
+                        if (zone == KerkerZone.NONE) onPoke() else onTouchZone(zone)
                         scope.launch {
                             squishT.snapTo(0f)
                             squishT.animateTo(1f, tween(450))
@@ -162,10 +171,29 @@ fun PetCanvas(
                 )
             }
             .pointerInput(Unit) {
+                val tickle = TickleDetector()
                 detectDragGestures(
-                    onDrag = { change, _ -> touch = change.position },
-                    onDragEnd = { touch = null },
-                    onDragCancel = { touch = null },
+                    onDragStart = { tickle.reset() },
+                    onDrag = { change, _ ->
+                        touch = change.position
+                        // A rub back and forth over him is a tickle, not a drag.
+                        if (tickle.onMove(change.position.x, change.uptimeMillis)) {
+                            onTickle()
+                            scope.launch {
+                                squishT.snapTo(0f)
+                                squishT.animateTo(1f, tween(450))
+                                squishT.snapTo(0f)
+                            }
+                        }
+                    },
+                    onDragEnd = {
+                        touch = null
+                        tickle.reset()
+                    },
+                    onDragCancel = {
+                        touch = null
+                        tickle.reset()
+                    },
                 )
             },
     ) {
