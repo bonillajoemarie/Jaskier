@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Jaskier is a two-module Android app (`:app` + `:songs` library, package `com.example.jaskier`):
-a kids' educational virtual-pet game built with Jetpack Compose. The code-drawn, depth-shaded pet
+a kids' educational virtual-pet game built with Jetpack Compose. The code-drawn, soft-flat pet
 "Kerker" (cartoon of the owner's kid: tan skin, dark curly hair, white tank top) has four stats —
 hunger, hydration, cleanliness, teeth — that decay in real time (timestamped, recomputed on app open; clamped
 to a floor so the pet never "dies"). Kids feed, water, shower, and brush its teeth; neglect two or more
@@ -47,9 +47,15 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   inside one atomic `edit {}` keyed on a caller-supplied `now` timestamp.
 - `pet/PetViewModel.kt` — StateFlow UI state + 30s refresh ticker + one-shot `PetEvent` SharedFlow
   (FED/SHOWERED/BRUSHED/HEALED) that drives Canvas animations.
+- `pet/ChibiDepth.kt` — **the app's visual language in one file.** Soft-flat (Toca-style): flat
+  fills, chunky rounded shapes, exactly one soft drop shadow per object, a single flat shade band,
+  and deterministic paper grain (`drawPaperGrain` — a grain reseeded per frame reads as static).
+  No gradients inside shapes, no rim light, no specular. All six Kerker scenes draw through
+  `drawBall`/`drawCurl`/`drawEyeBall`/`drawSoftBlush`/`drawShadedRoundRect`/`drawContactShadow`,
+  so restyling here restyles the whole app at once.
 - `pet/PetCanvas.kt` — Kerker is drawn entirely with Compose Canvas in a chibi style (big round
-  head, huge sparkly brown pupils, curls + wisps, tiny tank-top body with stubby arms/feet) with
-  3D-look shading and a contact shadow, over a sun/clouds backdrop. Geometry hangs off shared
+  head, huge brown pupils, curls + wisps, tiny tank-top body with stubby arms/feet) over a
+  sun/clouds backdrop. Geometry hangs off shared
   anchors (`headC()`, `headR()`, `mouthAnchor()`, `feetY()`). Interactive: pupils track the finger,
   tap = squish + hearts + `onPoke` callback (home speaks a giggle). Mood visuals: sad brows
   (hungry), dirt/stink (dirty), yellow teeth (yucky), pale green + droopy lids + sweat drop (sick).
@@ -62,7 +68,15 @@ Single activity (`MainActivity`), no DI framework, no navigation library.
   sick; `emotionOf` resolves the displayed `Emotion` with distress outranking excited/laughing/
   sleepy/bored, so a needy Kerker never looks bored. Crying is a *cartoon* waah that stops the
   moment the kid helps — per kids-ux the character must never appear to suffer, and no line ever
-  blames the kid for being away.
+  blames the kid for being away. `PetCanvas` renders each `Emotion`: crying rolls fat tears,
+  EXCITED hops with sparkles, LAUGHING squeezes the eyes shut and shakes, SLEEPY droops the lids and
+  floats Zzz, BORED puffs a slow sigh. `PetHomeScreen` drives the transient ones (excited ~2.6s
+  after any `PetEvent`, laughing on a poke or tickle, sleepy by device clock, bored after 25s
+  untouched).
+- `care/CareFeedback.kt` — the feedback every routine owes a pre-reader: `drawGhostHand`/
+  `drawGhostDrag` demonstrate the gesture on a loop once a step stalls for `DEMO_AFTER_MILLIS`
+  (3s), `drawTapSpark` fires on **every** tap so none is ever silent, `drawTargetHalo` marks what
+  to touch next, and `drawCareStars` shows progress as a filling star row rather than a number.
 - **Narration**: everything speaks. Home greets and voices Kerker's needs on mood change; every
   `MiniGameDef` has an `intro` spoken on entry; care steps speak their instructions; activities
   have voice lines ("Yum yum!", "Scrub scrub!", giggles on poke). All via `TtsManager`.

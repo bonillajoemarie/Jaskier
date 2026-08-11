@@ -88,6 +88,24 @@ fun ShowerScreen(
     var soapPos by remember { mutableStateOf<Offset?>(null) }
     var soapHeld by remember { mutableStateOf(false) }
     var lastTickMs by remember { mutableStateOf(0L) }
+    var sparkAt by remember { mutableStateOf<Offset?>(null) }
+    val spark = remember { Animatable(0f) }
+    var lastProgressMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var stalled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sparkAt) {
+        if (sparkAt != null) {
+            spark.snapTo(0f)
+            spark.animateTo(1f, tween(420))
+        }
+    }
+
+    // Demonstrate rather than instruct: a pre-reader cannot use written help.
+    LaunchedEffect(step, lastProgressMs) {
+        stalled = false
+        delay(DEMO_AFTER_MILLIS)
+        stalled = true
+    }
     val waterT = remember { Animatable(0f) }
     var rinseT by remember { mutableFloatStateOf(0f) }
 
@@ -146,6 +164,9 @@ fun ShowerScreen(
                 .fillMaxSize()
                 .pointerInput(step) {
                     detectTapGestures { tap ->
+                        // No tap is ever silent.
+                        sparkAt = tap
+                        lastProgressMs = System.currentTimeMillis()
                         if (isOnKnob(tap) && (step == ShowerStep.TURN_ON || step == ShowerStep.RINSE_HINT)) {
                             step = if (step == ShowerStep.TURN_ON) ShowerStep.GET_WET else ShowerStep.RINSING
                         }
@@ -230,6 +251,34 @@ fun ShowerScreen(
             if (step == ShowerStep.SOAP) {
                 drawSoap(soapPos ?: soapHomeDraw(), held = soapHeld, pulse = if (soapPos == null) pulse else 1f)
             }
+
+            // Picture progress: wet, three scrubbed spots, rinsed.
+            drawCareStars(
+                filled = when (step) {
+                    ShowerStep.TURN_ON -> 0
+                    ShowerStep.GET_WET -> 1
+                    ShowerStep.SOAP -> 1 + scrubbed.count { it >= 1f }
+                    ShowerStep.RINSE_HINT -> 4
+                    ShowerStep.RINSING -> 4
+                    ShowerStep.DONE -> 5
+                },
+                total = 5,
+            )
+
+            // Stalled? Show the kid exactly what to touch, on a loop.
+            if (stalled && step != ShowerStep.DONE && step != ShowerStep.RINSING) {
+                val target = when (step) {
+                    ShowerStep.SOAP -> {
+                        val next = DirtSpots.indices.firstOrNull { scrubbed[it] < 1f } ?: 0
+                        bodySpotDraw(DirtSpots[next])
+                    }
+                    else -> knobCenter()
+                }
+                drawTargetHalo(target, size.minDimension * 0.15f, pulse)
+                drawGhostHand(target, ((pulse - 0.94f) / 0.14f).coerceIn(0f, 1f))
+            }
+
+            sparkAt?.let { at -> drawTapSpark(at, spark.value) }
         }
 
         Text(

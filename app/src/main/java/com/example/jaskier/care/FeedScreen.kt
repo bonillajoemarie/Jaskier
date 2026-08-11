@@ -1,5 +1,6 @@
 package com.example.jaskier.care
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -104,6 +105,24 @@ fun FeedScreen(
     var spoonPos by remember { mutableStateOf<Offset?>(null) }
     var spoonHeld by remember { mutableStateOf(false) }
     var spoonLoad by remember { mutableStateOf<FoodChoice?>(null) }
+    var sparkAt by remember { mutableStateOf<Offset?>(null) }
+    val spark = remember { Animatable(0f) }
+    var lastProgressMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var stalled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sparkAt) {
+        if (sparkAt != null) {
+            spark.snapTo(0f)
+            spark.animateTo(1f, tween(420))
+        }
+    }
+
+    // Demonstrate rather than instruct: a pre-reader cannot use written help.
+    LaunchedEffect(step, lastProgressMs) {
+        stalled = false
+        delay(DEMO_AFTER_MILLIS)
+        stalled = true
+    }
     var mouthOpen by remember { mutableStateOf(false) }
 
     val hint = when (step) {
@@ -140,6 +159,21 @@ fun FeedScreen(
                 .fillMaxSize()
                 .pointerInput(step) {
                     detectTapGestures { tap ->
+                        // No tap is ever silent.
+                        sparkAt = tap
+                        lastProgressMs = System.currentTimeMillis()
+                        // Tap-first: tapping his mouth feeds him a bite outright,
+                        // so mealtime never depends on holding a drag.
+                        if (step == FeedStep.EAT && plate.isNotEmpty() &&
+                            (tap - mouthCenter()).getDistance() < minDim() * 0.24f
+                        ) {
+                            val food = plate.first()
+                            viewModel.feed(food.choice.hunger, food.choice.hydration)
+                            tts.speak("Mmm, yummy!", VoiceTone.EXCITED)
+                            food.bites -= 1
+                            if (food.bites <= 0) plate.removeAt(0)
+                            if (plate.isEmpty()) step = FeedStep.DONE
+                        }
                         if (step == FeedStep.CHOOSE) {
                             FoodChoices.forEachIndexed { index, choice ->
                                 if ((tap - shelfSlot(index)).getDistance() < minDim() * 0.12f && plate.size < 3) {
@@ -213,6 +247,25 @@ fun FeedScreen(
             drawPlate(plate.toList())
             if (step == FeedStep.CHOOSE) drawShelf(pulse)
             if (step == FeedStep.EAT) drawSpoon(spoonPos ?: spoonRestDraw(), spoonLoad, pulse = if (spoonPos == null) pulse else 1f)
+
+            // Picture progress: one star per plated food, plus the meal itself.
+            drawCareStars(
+                filled = when (step) {
+                    FeedStep.CHOOSE -> plate.size
+                    FeedStep.EAT -> 3
+                    FeedStep.DONE -> 4
+                },
+                total = 4,
+            )
+
+            // Stalled? Show the kid exactly what to touch, on a loop.
+            if (stalled && step != FeedStep.DONE) {
+                val target = if (step == FeedStep.CHOOSE) shelfSlotDraw(0) else mouthCenterDraw()
+                drawTargetHalo(target, size.minDimension * 0.15f, pulse)
+                drawGhostHand(target, ((pulse - 0.94f) / 0.14f).coerceIn(0f, 1f))
+            }
+
+            sparkAt?.let { at -> drawTapSpark(at, spark.value) }
         }
 
         Text(

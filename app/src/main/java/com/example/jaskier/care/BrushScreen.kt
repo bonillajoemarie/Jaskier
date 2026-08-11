@@ -4,6 +4,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -80,6 +81,24 @@ fun BrushScreen(
     var pastePos by remember { mutableStateOf<Offset?>(null) }
     var pasteHeld by remember { mutableStateOf(false) }
     var lastTickMs by remember { mutableStateOf(0L) }
+    var sparkAt by remember { mutableStateOf<Offset?>(null) }
+    val spark = remember { Animatable(0f) }
+    var lastProgressMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var stalled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sparkAt) {
+        if (sparkAt != null) {
+            spark.snapTo(0f)
+            spark.animateTo(1f, tween(420))
+        }
+    }
+
+    // Demonstrate rather than instruct: a pre-reader cannot use written help.
+    LaunchedEffect(step, lastProgressMs) {
+        stalled = false
+        delay(DEMO_AFTER_MILLIS)
+        stalled = true
+    }
 
     val hint = when (step) {
         BrushStep.PASTE -> "Put toothpaste on the toothbrush!"
@@ -112,6 +131,9 @@ fun BrushScreen(
                 // must be completable with taps alone. Dragging still works.
                 .pointerInput(step) {
                     detectTapGestures { tap ->
+                        // No tap is ever silent.
+                        sparkAt = tap
+                        lastProgressMs = System.currentTimeMillis()
                         when (step) {
                             BrushStep.PASTE -> {
                                 pasteAmount = 1f
@@ -230,6 +252,26 @@ fun BrushScreen(
                 scrubbing = brushHeld && step == BrushStep.BRUSH,
                 pulse = if (brushPos == null && step == BrushStep.BRUSH) pulse else 1f,
             )
+
+            // Progress as a picture: paste, then one star per tooth.
+            drawCareStars(
+                filled = if (step == BrushStep.PASTE) 0 else 1 + teethClean.count { it >= 1f },
+                total = 1 + TOOTH_COUNT,
+            )
+
+            // Stalled? Show the kid exactly what to touch, on a loop.
+            if (stalled && step != BrushStep.DONE) {
+                val target = if (step == BrushStep.PASTE) {
+                    brushRestDraw()
+                } else {
+                    val next = (0 until TOOTH_COUNT).firstOrNull { teethClean[it] < 1f } ?: 0
+                    toothCenterDraw(next)
+                }
+                drawTargetHalo(target, size.minDimension * 0.16f, pulse)
+                drawGhostHand(target, ((pulse - 0.94f) / 0.14f).coerceIn(0f, 1f))
+            }
+
+            sparkAt?.let { at -> drawTapSpark(at, spark.value) }
         }
 
         Text(

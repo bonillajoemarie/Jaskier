@@ -33,7 +33,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +49,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Calendar
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.example.jaskier.R
 import com.example.jaskier.minigames.MiniGameDef
 import com.example.jaskier.minigames.MiniGames
@@ -65,6 +71,9 @@ import com.example.jaskier.ui.theme.rememberPressSource
 
 private val TeethMint = Color(0xFF66D9C2)
 
+/** Long enough that a kid playing quietly isn't interrupted. */
+private const val BORED_AFTER_MILLIS = 25_000L
+
 @Composable
 fun PetHomeScreen(
     viewModel: PetViewModel,
@@ -76,6 +85,41 @@ fun PetHomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val feeling = feelingOf(state.hunger, state.hydration, state.cleanliness, state.teeth)
+
+    // Short-lived feelings. These are not persisted needs, so they live here
+    // rather than in PetStats.
+    var excited by remember { mutableStateOf(false) }
+    var laughing by remember { mutableStateOf(false) }
+    var lastTouchMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var bored by remember { mutableStateOf(false) }
+
+    // Celebrate every bit of care the kid gives.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect {
+            excited = true
+            delay(2_600)
+            excited = false
+        }
+    }
+
+    // Nobody has touched him for a while: sigh and look around. Charming, not nagging.
+    LaunchedEffect(lastTouchMillis) {
+        bored = false
+        delay(BORED_AFTER_MILLIS)
+        bored = true
+    }
+
+    val sleepy = remember(lastTouchMillis) {
+        isSleepyHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+    }
+
+    val emotion = emotionOf(
+        feeling = feeling,
+        excited = excited,
+        laughing = laughing,
+        sleepy = sleepy,
+        bored = bored,
+    )
 
     // Kerker says hello, then tells the kid what he needs whenever it changes.
     // When a need gets bad he cries about it — a cartoon waah, never a guilt
@@ -138,10 +182,17 @@ fun PetHomeScreen(
             // Each body part has its own reaction, and each rotates its lines so
             // repeat pokes never say the same thing twice in a row.
             var pokeIndex by remember { mutableIntStateOf(0) }
+            val scope = rememberCoroutineScope()
             val speakZone: (KerkerZone) -> Unit = { zone ->
                 val lines = linesFor(zone)
                 tts.speak(lines[pokeIndex % lines.size], VoiceTone.GIGGLY)
                 pokeIndex++
+                lastTouchMillis = System.currentTimeMillis()
+                scope.launch {
+                    laughing = true
+                    delay(1_400)
+                    laughing = false
+                }
             }
             val tickles = remember {
                 listOf("Hahaha! Stop it!", "Eeee! That tickles!", "Hehehehe!")
@@ -151,11 +202,18 @@ fun PetHomeScreen(
                 cleanliness = state.cleanliness,
                 mood = state.mood,
                 events = viewModel.events,
+                emotion = emotion,
                 onPoke = { speakZone(KerkerZone.NONE) },
                 onTouchZone = speakZone,
                 onTickle = {
                     tts.speak(tickles[pokeIndex % tickles.size], VoiceTone.GIGGLY)
                     pokeIndex++
+                    lastTouchMillis = System.currentTimeMillis()
+                    scope.launch {
+                        laughing = true
+                        delay(1_800)
+                        laughing = false
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

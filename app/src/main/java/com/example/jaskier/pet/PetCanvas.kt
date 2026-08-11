@@ -64,6 +64,7 @@ fun PetCanvas(
     mood: PetMood,
     events: Flow<PetEvent>,
     modifier: Modifier = Modifier,
+    emotion: Emotion = Emotion.HAPPY,
     onPoke: () -> Unit = {},
     onTouchZone: (KerkerZone) -> Unit = {},
     onTickle: () -> Unit = {},
@@ -198,12 +199,27 @@ fun PetCanvas(
             },
     ) {
         val bobPhase = sin(bobT * TWO_PI)
-        val bob = bobPhase * size.minDimension * 0.015f
+        // Excitement hops, laughter shakes, sleepiness breathes slow and deep.
+        val hop = if (emotion == Emotion.EXCITED) {
+            -kotlin.math.abs(sin(bobT * TWO_PI * 3f)) * size.minDimension * 0.05f
+        } else {
+            0f
+        }
+        val shake = if (emotion == Emotion.LAUGHING) {
+            sin(bobT * TWO_PI * 9f) * size.minDimension * 0.012f
+        } else {
+            0f
+        }
+        val breath = if (emotion == Emotion.SLEEPY) 0.5f else 1f
+        val bob = bobPhase * size.minDimension * 0.015f * breath + hop
         val pokeSquish = sin(squishT.value * Math.PI.toFloat()) * 0.10f
-        val squashY = 1f + bobPhase * 0.015f - pokeSquish
-        val squashX = 2f - (1f + bobPhase * 0.015f) + pokeSquish
+        val emotionSquish = if (emotion == Emotion.EXCITED) hop / size.minDimension * 0.8f else 0f
+        val squashY = 1f + bobPhase * 0.015f * breath - pokeSquish - emotionSquish
+        val squashX = 2f - (1f + bobPhase * 0.015f * breath) + pokeSquish + emotionSquish
 
         drawBackdrop(cloudT)
+        // Paper grain over the flat scene, deterministic so it never crawls.
+        drawPaperGrain()
 
         val eating = feedT.value > 0f
         val brushing = brushT.value > 0f
@@ -225,11 +241,17 @@ fun PetCanvas(
                 drawHair(bobT)
                 if (cleanliness < MOOD_THRESHOLD) drawDirt()
                 // Sick pets have droopy, half-closed eyes.
-                val lid = if (mood == PetMood.SICK) blinkT.coerceAtMost(0.55f) else blinkT
+                val lid = when {
+                    emotion == Emotion.LAUGHING -> 0.12f
+                    emotion == Emotion.SLEEPY -> blinkT.coerceAtMost(0.35f)
+                    mood == PetMood.SICK -> blinkT.coerceAtMost(0.55f)
+                    else -> blinkT
+                }
                 drawEyes(blinkScale = lid, mood = mood, touch = touch)
                 drawBlush(mood)
                 drawMouth(mood, eating = eating, brushing = brushing, brushT = brushT.value)
                 if (mood == PetMood.SICK) drawSweatDrop(bobT)
+                drawEmotionOverlay(emotion, bobT, shake)
             }
         }
 
@@ -801,4 +823,91 @@ private fun DrawScope.drawSparkle(at: Offset, r: Float, alpha: Float) {
         close()
     }
     drawPath(star, color)
+}
+
+/**
+ * The emotion layer, drawn over the finished character.
+ *
+ * Crying is deliberately a *cartoon* waah — two fat tears and a wobbly lip,
+ * nothing that reads as real distress — and it disappears the instant the kid
+ * meets the need, per the kids-ux rule that the pet may look grubby or sleepy
+ * but must never appear to suffer.
+ */
+private fun DrawScope.drawEmotionOverlay(emotion: Emotion, bobT: Float, shake: Float) {
+    val r = headR()
+    val head = headC() + Offset(shake, 0f)
+
+    when (emotion) {
+        Emotion.CRYING -> {
+            // Fat tears rolling down both cheeks, on a loop.
+            for (side in listOf(-1f, 1f)) {
+                for (i in 0 until 2) {
+                    val phase = ((bobT * 1.6f) + i * 0.5f) % 1f
+                    val x = head.x + side * r * 0.42f
+                    val y = head.y - r * 0.02f + phase * r * 0.95f
+                    val fade = (1f - phase).coerceIn(0f, 1f)
+                    drawCircle(SkyBlue.copy(alpha = 0.85f * fade), r * 0.075f, Offset(x, y))
+                    drawPath(
+                        Path().apply {
+                            moveTo(x, y - r * 0.13f)
+                            lineTo(x - r * 0.07f, y + r * 0.02f)
+                            lineTo(x + r * 0.07f, y + r * 0.02f)
+                            close()
+                        },
+                        SkyBlue.copy(alpha = 0.85f * fade),
+                    )
+                }
+            }
+        }
+
+        Emotion.EXCITED -> {
+            // Sparkles bursting outward from the celebration.
+            for (i in 0 until 7) {
+                val angle = i / 7f * TWO_PI + bobT * TWO_PI * 0.5f
+                val dist = r * (1.25f + sin(bobT * TWO_PI * 2f + i) * 0.14f)
+                val at = head + Offset(cos(angle) * dist, sin(angle) * dist * 0.85f)
+                drawCircle(SunYellow, r * 0.06f, at)
+                drawCircle(Color.White.copy(alpha = 0.8f), r * 0.026f, at)
+            }
+        }
+
+        Emotion.LAUGHING -> {
+            // Laugh lines flicking off both cheeks.
+            for (side in listOf(-1f, 1f)) {
+                for (i in 0 until 3) {
+                    val start = head + Offset(side * r * (0.95f + i * 0.1f), -r * 0.1f + i * r * 0.16f)
+                    drawLine(
+                        Ink.copy(alpha = 0.35f),
+                        start,
+                        start + Offset(side * r * 0.16f, -r * 0.05f),
+                        strokeWidth = r * 0.028f,
+                    )
+                }
+            }
+        }
+
+        Emotion.SLEEPY -> {
+            // Zzz drifting up and fading out.
+            for (i in 0 until 3) {
+                val phase = ((bobT * 0.7f) + i / 3f) % 1f
+                val at = head + Offset(r * (0.75f + phase * 0.5f), -r * (0.85f + phase * 1.1f))
+                val zzz = r * (0.13f + i * 0.035f)
+                val fade = (1f - phase).coerceIn(0f, 1f)
+                val ink = Ink.copy(alpha = 0.55f * fade)
+                val w = r * 0.02f
+                drawLine(ink, at, at + Offset(zzz, 0f), strokeWidth = w)
+                drawLine(ink, at + Offset(zzz, 0f), at + Offset(0f, zzz), strokeWidth = w)
+                drawLine(ink, at + Offset(0f, zzz), at + Offset(zzz, zzz), strokeWidth = w)
+            }
+        }
+
+        Emotion.BORED -> {
+            // A slow sigh puffing out to one side. Charming, never nagging.
+            val phase = (bobT * 0.9f) % 1f
+            val at = mouthAnchor() + Offset(shake + r * (0.4f + phase * 0.55f), phase * r * 0.18f)
+            drawCircle(Color.White.copy(alpha = 0.4f * (1f - phase)), r * 0.1f * (1f + phase), at)
+        }
+
+        Emotion.NEEDY, Emotion.HAPPY -> Unit
+    }
 }
